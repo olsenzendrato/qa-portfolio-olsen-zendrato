@@ -1,172 +1,174 @@
-# Case Study: MyTelkomsel Miniapp Integration
+# Case Study: MyTelkomsel Miniapp Integration — Ayolari & V-NSP
 
 **Role:** Lead QA Analyst  
 **Company:** PT Indonesia Satu Tujuh (PT INA 17)  
-**Duration:** 2024 – 2025  
-**Platform:** Mobile Application (Android & iOS) + Web CMS  
-**Scale:** National-level telecom digital ecosystem  
+**Duration:** 2024 – 2026  
+**Platform:** Mobile Application (Android & iOS) — MyTelkomsel Super App Ecosystem  
+**Scale:** National-level Telkomsel digital ecosystem  
 
 ---
 
 ## Background
 
-MyTelkomsel is Telkom Indonesia's primary mobile application — one of the most widely used telecom apps in Indonesia, serving tens of millions of active users. The platform operates as a super-app, managing data packages, billing, customer support, and a lifestyle ecosystem.
+MyTelkomsel is Telkom Indonesia's primary super-app, serving tens of millions of active users. PT INA 17 was engaged to develop, integrate, and maintain two Miniapps within the MyTelkomsel lifestyle ecosystem:
 
-PT INA 17 was engaged to develop and integrate third-party Miniapps — **Ayolari** and **VNSP** — into the MyTelkomsel lifestyle section. These Miniapps allow users to access additional services without leaving the core MyTelkomsel app.
+**Ayolari** — A running tracker Miniapp where users can record running activities, join challenges, claim rewards, and sync smartwatch data — all within the MyTelkomsel app. (Source: Telkomsel official blog)
 
-As the Lead QA Analyst, I was responsible for the entire quality gate of this integration — from requirement analysis through to successful deployment.
+**V-NSP (Video Nada Sambung Pribadi)** — A service that replaces the standard call waiting tone with a personalized video. When User A calls User B via WhatsApp, User A sees a custom V-NSP video while waiting for the call to be answered. (Source: Telkomsel official V-NSP page)
+
+As Lead QA Analyst, I was responsible for the entire quality gate of both integrations — from requirement analysis and test planning through to production deployment across multiple release cycles.
 
 ---
 
 ## The Challenge
 
-Integrating a third-party Miniapp into a national-scale super-app presents unique QA challenges that differ significantly from testing a standalone product:
+### Ayolari — Running Tracker Miniapp
 
-**1. Integration Stability**  
-The Miniapp must not disrupt the core MyTelkomsel app in any way. A crash in the Miniapp that cascades to the host app would impact millions of users.
+**1. Sensor Accuracy Validation**  
+Beyond standard functional testing, Ayolari required physical accuracy testing — real outdoor runs and treadmill sessions comparing Ayolari's recorded data against reference smartwatches (Garmin). This was unique QA work: I had to physically run while monitoring test variables.
 
-**2. Authentication Security**  
-The Miniapp must receive and validate auth tokens from MyTelkomsel correctly. A broken token flow means users are either locked out or, worse, authenticated incorrectly.
+**2. Smartwatch Compatibility Matrix**  
+Ayolari syncs with multiple smartwatch brands via Google Health Connect (Android) and Apple Health (iOS). Each combination of watch brand, health app, and OS platform needed to be individually tested — creating a complex compatibility matrix.
 
-**3. Cross-Platform Consistency**  
-The integration needed to behave identically across a wide range of Android and iOS devices — fragmented screen sizes, OS versions, and OEM customizations.
+**3. Cross-Platform Navigation Differences**  
+iOS and Android behave differently for deeplink-based navigation within Miniapps. Privacy Policy links opened via deeplink exit the Miniapp entirely on iOS (no back button available), while Android's native back button allows return. This required careful documentation and a recommended architectural fix.
 
-**4. UI/UX Compliance**  
-Ayolari and VNSP had to match MyTelkomsel's strict design guidelines. Visual inconsistencies in a super-app erode user trust.
+**4. Multi-Version User Consent Flow**  
+In v9.2, two separate consent pages were introduced — one for MyTelkomsel and one for Ayolari — with different persistence behaviors. The Ayolari consent is shown only once and persists even after MyTelkomsel reinstallation. Testing and documenting this behavior clearly was critical to prevent regression.
 
-**5. Network Resilience**  
-The Indonesian mobile network environment includes significant 3G coverage, especially outside major cities. The integration needed to be graceful under poor network conditions.
+### V-NSP — Video Nada Sambung Pribadi
+
+**1. Background Service Reliability Across OEM Devices**  
+V-NSP relies on a foreground service (`startforeground`) running in the background to intercept incoming WhatsApp calls and display the video. Different Android OEM manufacturers (Samsung, OPPO, Xiaomi, POCO, ITEL, Techno, Infinix) have aggressive battery optimization and background kill behaviors that could prevent this service from running — making cross-OEM testing critical.
+
+**2. Permission Architecture Complexity**  
+V-NSP requires multiple system permissions: notification access, overlay (display over other apps), AutoStart Background (Chinese OEM specific), and battery optimization exemption. Each combination of granted/skipped permissions produces different behavior, requiring a dedicated permission matrix test suite.
+
+**3. Multi-Tester Coordination**  
+V-NSP testing involved a team of 5 testers (Olsen, Dhafin, Resta, Marcel, Hasbi) across 7 devices simultaneously. Coordinating execution, tracking results per device, and maintaining consistent documentation required structured test management.
 
 ---
 
 ## My Approach
 
-### Phase 1: Requirement Analysis
+### Test Planning & Requirement Analysis
 
-Before writing a single test case, I reviewed the Business Requirement Document (BRD) in full with the product team. My focus was on identifying:
+For each release, I began with a full review of available requirements — BRDs, Figma designs, and internal chat discussions (especially for features with no formal spec). I mapped:
+- Happy paths and core user journeys
+- Negative scenarios and edge cases
+- Platform-specific behavioral differences (Android vs iOS)
+- Integration boundaries (token handoff, API contracts, health data sync)
 
-- **Happy paths** — the primary user journeys that must work flawlessly
-- **Edge cases** — what happens at the boundaries (token expiry, network failure, double-taps)
-- **Integration contract** — the API specification between MyTelkomsel and the Miniapp
+### Ayolari — Accuracy Testing (Real-World Physical Testing)
 
-Key questions I raised during this phase:
-- What happens when the auth token expires while the user is inside the Miniapp?
-- What is the expected behavior if the Miniapp server is down?
-- Does the Miniapp back-navigation restore the user's previous state in MyTelkomsel?
+For running accuracy validation, I designed a structured physical test protocol:
 
-### Phase 2: Test Case Design
+**Outdoor accuracy test:**
+- Conducted real outdoor runs using multiple Android devices simultaneously
+- Reference device: Garmin Watch (Garmin Connect app)
+- Measured: Duration, Distance, Pace, Calories per 500m intervals
 
-I authored **150+ test cases** covering:
-
-| Category | Test Count | Focus Areas |
+**Results:**
+| Metric | Accuracy vs Garmin | Result |
 |---|---|---|
-| Entry Point & Launch | 18 | Banner display, loading states, error states |
-| Authentication & Token | 22 | Valid token, expired token, session timeout |
-| Core Miniapp Flows | 45 | User journeys, content fetch, interactions |
-| UI/UX Compliance | 30 | Figma comparison, responsive layouts, dark mode |
-| API Validation | 20 | Status codes, payloads, error responses |
-| Device Matrix | 18 | Android (6 devices), iOS (6 devices), cross-device |
-| Network Resilience | 12 | Slow 3G, no connection, intermittent signal |
+| Duration | 0–30 second margin | ✅ Passed |
+| Distance | 0–0.03 km per 500m | ✅ Passed |
+| Pace | avg ±15 sec/km per 500m | ✅ Passed |
+| Calories | ~+16 kcal higher (+48%) | 📝 Needs tuning |
 
-**Test design techniques applied:**
-- **Boundary Value Analysis** — token expiry timing, character limits on inputs
-- **Equivalence Partitioning** — valid/invalid network states, valid/invalid tokens
-- **Use Case Testing** — end-to-end user journeys from banner tap to task completion
-- **Exploratory Testing** — unscripted sessions targeting unexpected interaction patterns
+**Indoor (treadmill) accuracy test:**
+- Same protocol on treadmill, comparing with Garmin
+- Identified that Xiaomi Mi Fitness does not send treadmill workout data to Health Connect — causing indoor sync failure for Xiaomi watches
 
-### Phase 3: API Validation
+**Smartwatch Sync Matrix (12 devices x 2 platforms):**
+Tested 8 distinct smartwatch models across Android and iOS, using their native health apps as the sync bridge. Documented specific incompatibilities (e.g., Samsung Wear OS watches not supported by Apple Health; Oppo Watch OHealth app only syncs steps on iOS — no full workout sync).
 
-I used **Postman** to validate every API endpoint in the integration contract:
+### V-NSP — OEM Permission Matrix Testing
 
-- `POST /miniapp/launch` — token exchange and session initialization
-- `GET /miniapp/content` — content fetching with pagination
-- `POST /miniapp/track` — event tracking and analytics
-- Error scenarios: 401, 403, 404, 500 responses
+For V-NSP, I structured the permission testing into a matrix covering:
+- 3 permission categories: Notification, Overlay (display over apps), AutoStart Background + Battery Optimize
+- 7 OEM devices with different Android skins
+- 4 negative scenarios: skipping each permission type individually
 
-I also used **Charles Proxy** to monitor actual network traffic from real devices, confirming that:
-- Auth tokens were being passed in headers correctly (not in URL params)
-- Sensitive user data was not exposed in unencrypted traffic
-- API response times were within acceptable thresholds
+**Key finding:** AutoStart Background and Battery Optimize permissions are optional on most devices — startforeground still runs without them. However, without these permissions, the service is more likely to be killed by aggressive battery management on Chinese OEM devices (OPPO, Xiaomi, POCO), degrading the V-NSP experience.
 
-### Phase 4: Real Device Testing
+### Multi-Device Coordination (V-NSP)
 
-All execution was performed on **physical devices** — no emulators for final validation. Devices tested:
-
-| Device | OS | Notes |
-|---|---|---|
-| Samsung Galaxy A54 | Android 13 | Most common mid-range segment |
-| Samsung Galaxy A32 | Android 12 | Older OS — identified image rendering bug |
-| Xiaomi Redmi Note 12 | Android 13 | Popular brand in Indonesia |
-| iPhone 13 | iOS 16.x | Primary iOS target |
-| iPhone 14 Pro | iOS 17.x | High-end iOS |
-| iPhone SE (3rd Gen) | iOS 16.x | Small screen validation |
-
-Using **Android Studio Logcat**, I captured crash logs and runtime errors that were not visible in the UI — enabling developers to pinpoint root causes significantly faster than error messages alone.
+For the 5-tester, 7-device V-NSP test execution:
+- I created a structured result sheet with per-device columns for each test case
+- Each tester's results were tracked by tester name + device in the result columns
+- A cross-check final column validated consistency across all testers before sign-off
+- Daily sync with the development team on any inter-device behavioral differences
 
 ---
 
-## Key Bugs Found
+## Key Bugs Found & Impact
 
-### Critical (2 bugs)
+### Ayolari
 
-**BUG-MA-001 — App crashed on Miniapp launch when MyTelkomsel had no cached user data**  
-Scenario: First launch after fresh MyTelkomsel install → Miniapp crashed immediately because the token generation assumed cached user data existed.  
-Impact: 100% failure rate for new users.
+| Bug | Severity | Impact | Resolution |
+|---|---|---|---|
+| iOS Privacy Policy deeplink exits Miniapp — no return path | Medium | All iOS new users affected during onboarding | Documented with architectural fix recommendation (use in-app WebView) |
+| Calorie tracking consistently higher than reference by ~48% | Medium | Data accuracy for health-conscious users | Flagged for algorithm adjustment |
+| Xiaomi Watch indoor treadmill sync not working | Medium | Affects all Xiaomi Watch users on treadmill mode | Root cause: Mi Fitness does not forward treadmill data to Health Connect |
 
-**BUG-MA-002 — Auth token sent in plain URL parameter instead of Authorization header**  
-Scenario: API traffic inspection via Charles Proxy revealed the token in the URL query string.  
-Impact: Security vulnerability — tokens visible in server logs and browser history.
+### V-NSP
 
-### High (5 bugs)
-
-- Miniapp did not handle 503 server error gracefully (showed raw JSON error to user)
-- Miniapp back button did not restore MyTelkomsel scroll position on Android
-- Banner thumbnail failed to load on Samsung Android 12 devices (WebP format issue)
-- Session timeout did not trigger re-auth flow — app went into silent broken state
-- Double-tap on CTA triggered duplicate API calls leading to duplicate transactions
-
-### Medium (8 bugs)
-
-- Layout overflow on small screens (iPhone SE)
-- Dark mode rendering issues on text elements
-- Incorrect empty state message when content API returned 404
-- Loading spinner not shown when content fetch takes >2 seconds
+| Bug | Severity | Impact | Resolution |
+|---|---|---|---|
+| startforeground does not run when user skips any required permission | High | V-NSP feature completely non-functional without correct permissions | Expected behavior documented; user guided to grant all permissions |
+| Custparam from pre-production environment accepted in onboarding but blocks landing page | Medium | Could confuse internal testers using wrong config | Documented; env isolation recommended |
 
 ---
 
 ## Outcome
 
+### Ayolari (v9.2 — March 2026)
+
 | Metric | Result |
 |---|---|
-| Total test cases executed | 150+ |
-| Critical bugs found & resolved | 2 |
-| High bugs found & resolved | 5 |
-| Blocker bugs at UAT stage | 0 |
-| Platforms covered | Android + iOS + Web CMS |
-| Deployment result | Successful — zero post-deployment critical issues |
+| Test cases executed | 50+ (positive + negative) |
+| Smartwatch models validated | 8 (Android + iOS) |
+| Devices tested — accuracy | 12 physical devices |
+| Running sessions conducted | Multiple (outdoor + treadmill) |
+| Critical blockers at UAT | 0 |
+| Production deployment | Successful |
 
-The Miniapp launched into the MyTelkomsel ecosystem on schedule, with **zero critical or high severity bugs** reaching the production environment.
+### V-NSP (July 2025)
+
+| Metric | Result |
+|---|---|
+| Test cases executed | 80+ (positive + negative) |
+| Devices tested | 7 across 5 Android OEMs |
+| Testers coordinated | 5 |
+| Permission scenarios covered | 10+ |
+| Critical blockers at UAT | 0 |
+| Production deployment | Successful |
 
 ---
 
 ## Lessons Learned
 
-**1. API testing should start before UI testing.** Validating the integration contract early exposed the token security issue before a single UI test was run.
+**1. Physical accuracy testing requires its own test protocol.**  
+Standard software testing methods don't apply to sensor-based features. I had to design a repeatable physical test procedure — fixed distances, reference devices, multiple devices run simultaneously — to produce meaningful accuracy data.
 
-**2. Real devices reveal what emulators miss.** The Samsung Android 12 WebP rendering bug only appeared on physical devices — the emulator passed.
+**2. OEM fragmentation on Android is a real and significant testing challenge.**  
+A test that passes on Samsung may fail on POCO or ITEL due to OEM-specific battery management and background process policies. Device diversity in the test matrix is non-negotiable for products targeting the Indonesian market.
 
-**3. Exploratory testing at edge network conditions is non-negotiable for Indonesian market.** 3G simulation via Charles Proxy consistently uncovered behavior that WiFi testing missed.
+**3. Platform differences (Android vs iOS) must be explicitly tested, documented, and communicated.**  
+What works seamlessly on Android may behave completely differently on iOS at the navigation and permission level. These differences need clear documentation and architectural recommendations — not just bug reports.
 
-**4. Good bug reports accelerate developer velocity.** Providing Logcat logs alongside bug reports reduced average developer investigation time and improved fix-rate measurably.
+**4. Multi-tester coordination requires clear structure upfront.**  
+When coordinating 5 testers across 7 devices, an unstructured result sheet creates confusion fast. Building a per-tester, per-device result tracking format before execution begins saves significant time during analysis.
 
 ---
 
 ## Artifacts
 
-- [Test Cases — MyTelkomsel Miniapp](../01-test-cases/miniapp/MyTelkomsel-Miniapp-TestCases.md)
-- [API Test Cases](../03-api-testing/README.md)
+- [Test Cases — Ayolari & V-NSP Miniapp](../01-test-cases/miniapp/)
 - [Bug Report Samples](../02-bug-reports/sample-bug-reports.md)
+- [Test Plan Template](../04-test-plans/Test-Plan-Template.md)
 
 ---
 
-> *All proprietary business data, actual API endpoints, and production metrics have been anonymized in accordance with confidentiality obligations.*
+> *All proprietary business data, internal API endpoints, MSISDN identifiers, authentication tokens, and production metrics have been anonymized in accordance with confidentiality obligations to PT Indonesia Satu Tujuh.*
