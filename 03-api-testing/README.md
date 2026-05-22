@@ -1,6 +1,6 @@
 # 03 — API Testing
 
-Documentation and test cases for API validation using Postman, covering functional, negative, and performance testing of REST API endpoints.
+API test documentation based on real REST API validation work performed using Postman at PT Indonesia Satu Tujuh. This folder covers endpoint testing for the Milov application, including authentication, core features, and data retrieval flows.
 
 ---
 
@@ -8,225 +8,339 @@ Documentation and test cases for API validation using Postman, covering function
 
 | Tool | Purpose |
 |---|---|
-| **Postman** | API request execution, response validation, collection management |
-| **Charles Proxy** | Network traffic inspection, request/response monitoring on mobile |
+| **Postman** | API request execution, collection management, response validation |
+| **Charles Proxy** | Network traffic inspection on mobile devices; monitoring actual API calls from app |
 | **Fiddler** | HTTP/HTTPS traffic debugging on web platforms |
 
-## What I Test in APIs
+## What I Validate in API Testing
 
-1. **Status Code Validation** — Correct HTTP status codes for each scenario (200, 201, 400, 401, 403, 404, 500)
-2. **Response Payload Structure** — Required fields present, correct data types, no null values where unexpected
-3. **Authentication** — Valid token accepted, expired/missing token rejected with correct error
-4. **Error Handling** — Meaningful error messages returned for invalid inputs
-5. **Data Integrity** — Response data matches what was submitted / matches database state
-6. **Performance Under Throttling** — API behavior under slow network conditions (Slow 3G simulation)
-
----
-
-# API Test Cases
-
-## Endpoint Group 1: Miniapp Launch API
-
-**Base URL:** `https://api.[platform].id/v1` *(anonymized)*  
-**Authentication:** Bearer Token (passed from host app)
+1. **HTTP Status Codes** — Correct response codes per scenario (200, 201, 400, 401, 403, 404, 500)
+2. **Response Payload Structure** — All required fields present, correct data types, no unexpected null values
+3. **Authentication** — Bearer token accepted for valid sessions; rejected with correct error for missing/expired tokens
+4. **Error Handling** — Meaningful, structured error responses for invalid inputs
+5. **Data Integrity** — Response data matches what was submitted and/or matches database state
+6. **Pagination** — Correct page/limit behavior; no duplicate or missing items across pages
+7. **Network Behavior** — API responses under throttled network conditions (via Charles Proxy)
 
 ---
 
-### TC-API-001 — Successful Miniapp Launch
+# API Test Cases — Milov Application
+
+**Project:** Milov — Fun Love Match Game App  
+**Base URL:** `https://staging.milov.id/go` *(staging environment, anonymized)*  
+**Testing Date:** February 26–27, 2024  
+**Tester:** Olsen Yeremia Zendrato  
+**Auth Type:** Bearer Token  
+
+---
+
+## Category 1: Authentication
+
+### TC-API-AUTH-001 — User Login via Google
 
 | Field | Detail |
 |---|---|
-| **Endpoint** | `POST /miniapp/launch` |
-| **Auth** | Bearer Token (valid) |
-| **Scenario** | Launch Miniapp with valid user token |
+| **Endpoint** | `POST /api/v1/auth/login/google` |
+| **Method** | POST |
+| **Body Type** | x-www-form-urlencoded |
+| **Auth** | None (pre-login) |
 
 **Request Body:**
-```json
-{
-  "miniapp_id": "ayolari",
-  "user_id": "USR-12345",
-  "platform": "android",
-  "app_version": "3.4.2"
-}
+```
+access_token = [Google OAuth Token]
+device_id    = [Device Build ID]
 ```
 
 **Expected Response — 200 OK:**
 ```json
 {
-  "status": "success",
   "data": {
-    "miniapp_url": "https://miniapp.ayolari.id/launch?token=...",
-    "session_id": "SES-abc123",
-    "expires_at": "2026-04-30T12:30:00Z",
-    "user_context": {
-      "user_id": "USR-12345",
-      "name": "Olsen Test",
-      "tier": "premium"
-    }
-  }
+    "user_id": 282736154,
+    "first_name": "string",
+    "last_name": "string",
+    "email": "string",
+    "profile_picture_path": "https://...",
+    "status": 3,
+    "date_of_birth": "2024-01-24T00:00:00Z",
+    "gender": "string",
+    "coin": 0,
+    "zodiac": "string",
+    "love_language": "string",
+    "is_active": false
+  },
+  "token": "string"
 }
 ```
 
 **Validation Checklist:**
-- [x] Status code is `200`
-- [x] `miniapp_url` is present and is a valid URL
-- [x] `session_id` is present and non-empty
-- [x] `expires_at` is a valid ISO 8601 timestamp
-- [x] `user_context.user_id` matches the request `user_id`
+- [x] Status code `200`
+- [x] `data.user_id` is integer and not null
+- [x] `token` is present and non-empty string
+- [x] `data.email` matches the Google account used
+- [x] `data.date_of_birth` is valid ISO 8601 format
 - [x] Response time < 2000ms
 
+**Status:** OK
+
 ---
 
-### TC-API-002 — Launch Without Auth Token
+### TC-API-AUTH-002 — Issue New Token
 
 | Field | Detail |
 |---|---|
-| **Endpoint** | `POST /miniapp/launch` |
-| **Auth** | No token (header omitted) |
-| **Scenario** | Verify unauthorized access is rejected |
-
-**Expected Response — 401 Unauthorized:**
-```json
-{
-  "status": "error",
-  "error": {
-    "code": "UNAUTHORIZED",
-    "message": "Authentication token is missing or invalid."
-  }
-}
-```
-
-**Validation Checklist:**
-- [x] Status code is `401`
-- [x] Response body contains `error.code` = `"UNAUTHORIZED"`
-- [x] No `miniapp_url` or user data exposed in error response
-
----
-
-### TC-API-003 — Launch With Expired Token
-
-| Field | Detail |
-|---|---|
-| **Endpoint** | `POST /miniapp/launch` |
-| **Auth** | Bearer Token (expired) |
-| **Scenario** | Verify expired token is rejected with correct message |
-
-**Expected Response — 401 Unauthorized:**
-```json
-{
-  "status": "error",
-  "error": {
-    "code": "TOKEN_EXPIRED",
-    "message": "Your session has expired. Please log in again."
-  }
-}
-```
-
-**Validation Checklist:**
-- [x] Status code is `401`
-- [x] Error code is specifically `TOKEN_EXPIRED` (distinguishable from missing token)
-- [x] No sensitive data leaked in error response
-
----
-
-### TC-API-004 — Launch With Invalid Miniapp ID
-
-| Field | Detail |
-|---|---|
-| **Endpoint** | `POST /miniapp/launch` |
-| **Auth** | Bearer Token (valid) |
-| **Scenario** | Verify non-existent miniapp returns 404 |
-
-**Request Body:**
-```json
-{
-  "miniapp_id": "nonexistent_app",
-  "user_id": "USR-12345",
-  "platform": "android"
-}
-```
-
-**Expected Response — 404 Not Found:**
-```json
-{
-  "status": "error",
-  "error": {
-    "code": "MINIAPP_NOT_FOUND",
-    "message": "The requested miniapp does not exist."
-  }
-}
-```
-
----
-
-## Endpoint Group 2: Content Fetch API
-
----
-
-### TC-API-010 — Fetch Homepage Content (Success)
-
-| Field | Detail |
-|---|---|
-| **Endpoint** | `GET /miniapp/content?miniapp_id=ayolari&section=home` |
-| **Auth** | Bearer Token (valid) |
-| **Scenario** | Fetch homepage content sections |
+| **Endpoint** | `GET /api/v1/auth/token/requestnew/{user_id}` |
+| **Method** | GET |
+| **Auth** | Bearer Token (existing valid token) |
+| **Path Param** | `user_id` = valid integer |
 
 **Expected Response — 200 OK:**
 ```json
 {
-  "status": "success",
+  "token": "string"
+}
+```
+
+**Validation Checklist:**
+- [x] Status code `200`
+- [x] New `token` returned, non-empty
+- [x] New token is different from the one used in the request
+- [x] Old token invalidated after new token issued
+
+**Status:** OK
+
+---
+
+## Category 2: Hobby
+
+### TC-API-HOBBY-001 — Get All Hobbies
+
+| Field | Detail |
+|---|---|
+| **Endpoint** | `GET /api/v1/hobby` |
+| **Method** | GET |
+| **Auth** | Bearer Token |
+| **Query Params** | `page=1`, `limit=10` |
+
+**Expected Response — 200 OK:**
+```json
+{
+  "data": [
+    { "hobby_id": 1, "hobby_name": "memasak", "hobby_description": "" },
+    { "hobby_id": 2, "hobby_name": "fotografi", "hobby_description": "" },
+    { "hobby_id": 3, "hobby_name": "bersepeda", "hobby_description": "" }
+  ]
+}
+```
+
+**Validation Checklist:**
+- [x] Status code `200`
+- [x] `data` is an array
+- [x] Each item contains `hobby_id` (integer), `hobby_name` (string), `hobby_description` (string)
+- [x] Pagination: results ≤ `limit` value
+- [x] No duplicate `hobby_id` values in response
+
+**Status:** OK
+
+---
+
+## Category 3: User Profile
+
+### TC-API-USER-001 — Get User Profile
+
+| Field | Detail |
+|---|---|
+| **Endpoint** | `GET /api/v1/user/{user_id}` |
+| **Method** | GET |
+| **Auth** | Bearer Token |
+
+**Expected Response — 200 OK:**
+```json
+{
   "data": {
-    "sections": [
-      {
-        "id": "banner",
-        "type": "carousel",
-        "items": [
-          {
-            "id": "item-001",
-            "title": "Promo Title",
-            "thumbnail_url": "https://cdn.example.com/img.jpg",
-            "deeplink": "ayolari://promo/001"
-          }
-        ]
-      }
-    ],
-    "total_sections": 3
+    "user_id": "integer",
+    "first_name": "string",
+    "last_name": "string",
+    "email": "string",
+    "profile_picture_path": "string",
+    "date_of_birth": "datetime",
+    "gender": "string",
+    "coin": "integer",
+    "zodiac": "string",
+    "shio": "string",
+    "love_language": "string",
+    "is_active": "boolean"
   }
 }
 ```
 
 **Validation Checklist:**
-- [x] Status code is `200`
-- [x] `sections` is an array with at least 1 item
-- [x] Each item contains `id`, `title`, `thumbnail_url`, `deeplink`
-- [x] `thumbnail_url` is a valid HTTPS URL
-- [x] Response time < 1500ms on standard connection
+- [x] Status code `200`
+- [x] `user_id` matches path parameter
+- [x] All required fields present and non-null
+- [x] `coin` is non-negative integer
+- [x] `profile_picture_path` is valid HTTPS URL
+
+**Status:** OK
 
 ---
 
-### TC-API-011 — Fetch Content Under Slow Network
+### TC-API-USER-002 — Get Profile with Invalid Token
 
 | Field | Detail |
 |---|---|
-| **Endpoint** | `GET /miniapp/content` |
-| **Network** | Throttled to Slow 3G via Charles Proxy |
-| **Scenario** | Verify API behaves gracefully under poor network |
+| **Endpoint** | `GET /api/v1/user/{user_id}` |
+| **Auth** | Invalid / expired Bearer Token |
 
-**Expected Behavior:**
-- Response still returns `200` (may take longer)
-- No timeout error before 10 seconds
-- App displays loading state while waiting
-- Content renders correctly once received
+**Expected Response — 401 Unauthorized:**
+```json
+{
+  "error": "Unauthorized",
+  "message": "Token is invalid or expired"
+}
+```
+
+**Validation Checklist:**
+- [x] Status code `401`
+- [x] Error message present and descriptive
+- [x] No user data exposed in error response
+
+**Status:** OK
+
+---
+
+## Category 4: Match / Scan Feature
+
+### TC-API-MATCH-001 — Scan Friend Match
+
+| Field | Detail |
+|---|---|
+| **Endpoint** | `POST /api/v1/match/scan` |
+| **Method** | POST |
+| **Auth** | Bearer Token |
+
+**Request Body:**
+```json
+{
+  "target_user_id": "integer",
+  "name": "string",
+  "date_of_birth": "date",
+  "gender": "string"
+}
+```
+
+**Expected Response — 200 OK:**
+```json
+{
+  "data": {
+    "match_percentage": "integer",
+    "coin_deducted": 1,
+    "remaining_coin": "integer"
+  }
+}
+```
+
+**Validation Checklist:**
+- [x] Status code `200`
+- [x] `match_percentage` is integer between 0–100
+- [x] `coin_deducted` = 1 (each scan costs 1 coin)
+- [x] `remaining_coin` = previous coin - 1
+- [x] Match result appears in Friends → Match tab after scan
+
+**Status:** OK with Note — Match result intermittently not appearing in Friends tab (see Bug Report BUG-2024-007)
+
+---
+
+### TC-API-MATCH-002 — Invite Friend
+
+| Field | Detail |
+|---|---|
+| **Endpoint** | `POST /api/v1/friend/invite` |
+| **Method** | POST |
+| **Auth** | Bearer Token |
+
+**Expected Response — 200 OK:**
+```json
+{
+  "status": "invited",
+  "coin_deducted": 2,
+  "remaining_coin": "integer"
+}
+```
+
+**Validation Checklist:**
+- [x] Status code `200`
+- [x] `coin_deducted` = 2 (each invite costs 2 coins)
+- [x] "Undang" button changes to "Diundang" state on UI
+- [x] Friend appears in invitation list on recipient's device
+
+**Status:** OK with Note — "Undang" button reactivates when user scrolls and encounters same profile again in Explore, allowing unintended re-invitation and double coin deduction
+
+---
+
+## Category 5: Subscribe & Purchase
+
+### TC-API-SUB-001 — Subscribe Premium
+
+| Field | Detail |
+|---|---|
+| **Endpoint** | `POST /api/v1/subscription/subscribe` |
+| **Method** | POST |
+| **Auth** | Bearer Token |
+
+**Expected Response — 200 OK:**
+```json
+{
+  "status": "subscribed",
+  "pulsa_deducted": true,
+  "coin_added": 15
+}
+```
+
+**Validation Checklist:**
+- [x] Status code `200`
+- [x] User's phone credit (pulsa) deducted
+- [x] User's coin balance increased by 15
+- [x] Premium features unlocked after subscription
+
+**Status:** OK
+
+---
+
+### TC-API-SUB-002 — Buy Coins
+
+| Field | Detail |
+|---|---|
+| **Endpoint** | `POST /api/v1/coins/purchase` |
+| **Method** | POST |
+| **Auth** | Bearer Token |
+
+**Expected Response — 200 OK:**
+```json
+{
+  "status": "purchased",
+  "pulsa_deducted": true,
+  "coin_added": 30
+}
+```
+
+**Validation Checklist:**
+- [x] Status code `200`
+- [x] User's pulsa deducted
+- [x] Coin balance increased by 30
+- [x] New coin balance reflected immediately in UI
+
+**Status:** OK
 
 ---
 
 ## API Testing Notes
 
-- All API tests executed via **Postman** with environment variables for base URL and auth tokens
-- Network throttling simulated via **Charles Proxy** to test slow-connection behavior
-- Response validation includes both structure (keys present) and data type checks
-- Error response messages validated verbatim to ensure developer-friendly error communication
+- All API tests executed via **Postman** with environment variables for base URL and Bearer tokens
+- Network traffic monitored via **Charles Proxy** on physical test devices to verify actual request/response in mobile context
+- Bearer token stored as Postman environment variable; automatically included in all authenticated request headers
+- Response body validation includes: field presence, data types, value ranges, and business logic correctness — not just HTTP status codes
+- Pagination tested by varying `page` and `limit` parameters and verifying no duplicate or missing items
 
 ---
 
-> **Note:** All endpoints, URLs, and data shown are anonymized/simulated versions based on real API testing work.
+> **Note:** Base URL, actual API endpoints, token values, and user identifiers have been anonymized. API structure based on real Milov backend testing at PT Indonesia Satu Tujuh.
