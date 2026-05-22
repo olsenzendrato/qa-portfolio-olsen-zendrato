@@ -26,7 +26,7 @@ My core strength lies in bridging the gap between business requirements and tech
 | Testing Layer | Skills & Tools |
 |---|---|
 | **Functional & Manual Testing** | Black-box, Regression, UAT, Stress Testing, E2E |
-| **Test Design Techniques** | BVA, Equivalence Partitioning, Use Case, Decision Table, Exploratory |
+| **Test Design Techniques** | BVA, Equivalence Partitioning, Use Case, Exploratory, Negative Testing, Cross-Device Testing, Cross-Platform Testing |
 | **API Testing** | Postman (GET/POST validation, payload, status codes, latency) |
 | **Mobile Testing** | Real device testing — Android & iOS, Android Studio (Emulator & Logcat) |
 | **Web Testing** | Cross-browser (Chrome, Safari, Firefox), CMS workflow testing, Selenium WebDriver |
